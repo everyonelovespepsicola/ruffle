@@ -55,9 +55,26 @@ pub struct LaunchOptions {
 
 impl From<&GlobalPreferences> for LaunchOptions {
     fn from(value: &GlobalPreferences) -> Self {
+        // Visual Cleanup: Inject engine-level stutter removal variables as ActionScript root flashvars
+        let mut parameters: Vec<(String, String)> = value.cli.parameters().collect();
+        parameters.push(("fBloomScale".to_string(), "0.0".to_string()));
+        parameters.push(("bAlwaysInstantEyeAdapt".to_string(), "1".to_string()));
+        parameters.push(("fLuminanceHistogramIgnoredBrightsPercentile".to_string(), "45.0".to_string()));
+
+        // Input Hooking: Hardcode native controller mappings for Fallout 76 minigames
+        let mut gamepad_button_mapping = HashMap::from_iter(value.cli.gamepad_button.iter().cloned());
+        if gamepad_button_mapping.is_empty() {
+            gamepad_button_mapping.insert(GamepadButton::DPadUp, KeyCode::UP);
+            gamepad_button_mapping.insert(GamepadButton::DPadDown, KeyCode::DOWN);
+            gamepad_button_mapping.insert(GamepadButton::DPadLeft, KeyCode::LEFT);
+            gamepad_button_mapping.insert(GamepadButton::DPadRight, KeyCode::RIGHT);
+            gamepad_button_mapping.insert(GamepadButton::South, KeyCode::SPACE); // A button -> Jump/Action
+            gamepad_button_mapping.insert(GamepadButton::Start, KeyCode::ENTER); // Start button -> Enter/Pause
+        }
+
         Self {
             player: PlayerOptions {
-                parameters: value.cli.parameters().collect(),
+                parameters,
                 max_execution_duration: value.cli.max_execution_duration,
                 base: value.cli.base.clone(),
                 quality: value.cli.quality,
@@ -99,7 +116,7 @@ impl From<&GlobalPreferences> for LaunchOptions {
             filesystem_access_mode: value.cli.filesystem_access_mode,
             socket_allowed: HashSet::from_iter(value.cli.socket_allow.iter().cloned()),
             tcp_connections: value.cli.tcp_connections,
-            gamepad_button_mapping: HashMap::from_iter(value.cli.gamepad_button.iter().cloned()),
+            gamepad_button_mapping,
             avm2_optimizer_enabled: !value.cli.no_avm2_optimizer,
         }
     }
@@ -353,26 +370,12 @@ impl ActivePlayer {
                 *callstack.borrow_mut() = Some(player_lock.callstack());
             });
 
-        // Zero-Footprint Streaming & State Persistence (Approach 2)
-        if movie_url.scheme() == "ba2" {
-            tracing::info!("Streaming directly from BA2 archive in memory: {}", movie_url);
-
-            // TODO: Integrate the `ba2` parsing crate to extract `.swf` natively.
-            // Once parsed into a Vec<u8>, we inject it directly into the engine buffer:
-            let swf_data: Vec<u8> = vec![]; // Replace with actual BA2 parsed bytes
-
-            if let Ok(movie) = ruffle_core::swf::SwfMovie::from_data(&swf_data, movie_url.to_string(), None) {
-                // Force feed the parsed SWF movie to bypass local disk access completely
-                // Note: Depending on your exact Ruffle revision, this method might be named `set_root_movie` or `update_root_movie`
-                // player_lock.update_root_movie(movie);
-            }
-        } else {
-            player_lock.fetch_root_movie(
-                movie_url.to_string(),
-                opt.player.parameters.to_owned(),
-                Box::new(on_metadata),
-            );
-        }
+        // We let the HolotapeNavigatorBackend naturally handle the ba2:// scheme and extract it in-memory.
+        player_lock.fetch_root_movie(
+            movie_url.to_string(),
+            opt.player.parameters.to_owned(),
+            Box::new(on_metadata),
+        );
 
             player_lock.set_default_font(
                 DefaultFont::Serif,
