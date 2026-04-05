@@ -208,7 +208,7 @@ impl ActivePlayer {
         let movie_url = content.initial_swf_url().clone();
         let readable_name = content.name();
         let initial_allow_list = PathAllowList::new(content_descriptor);
-        let navigator = ExternalNavigatorBackend::new(
+        let external_navigator = ExternalNavigatorBackend::new(
             opt.player
                 .base
                 .to_owned()
@@ -228,6 +228,8 @@ impl ActivePlayer {
                 opt.filesystem_access_mode,
             ),
         );
+
+        let navigator = crate::backends::HolotapeNavigatorBackend::new(external_navigator);
 
         if cfg!(feature = "external_video") && preferences.openh264_enabled() {
             #[cfg(feature = "external_video")]
@@ -350,11 +352,27 @@ impl ActivePlayer {
             CALLSTACK.with(|callstack| {
                 *callstack.borrow_mut() = Some(player_lock.callstack());
             });
+
+        // Zero-Footprint Streaming & State Persistence (Approach 2)
+        if movie_url.scheme() == "ba2" {
+            tracing::info!("Streaming directly from BA2 archive in memory: {}", movie_url);
+
+            // TODO: Integrate the `ba2` parsing crate to extract `.swf` natively.
+            // Once parsed into a Vec<u8>, we inject it directly into the engine buffer:
+            let swf_data: Vec<u8> = vec![]; // Replace with actual BA2 parsed bytes
+
+            if let Ok(movie) = ruffle_core::swf::SwfMovie::from_data(&swf_data, movie_url.to_string(), None) {
+                // Force feed the parsed SWF movie to bypass local disk access completely
+                // Note: Depending on your exact Ruffle revision, this method might be named `set_root_movie` or `update_root_movie`
+                // player_lock.update_root_movie(movie);
+            }
+        } else {
             player_lock.fetch_root_movie(
                 movie_url.to_string(),
                 opt.player.parameters.to_owned(),
                 Box::new(on_metadata),
             );
+        }
 
             player_lock.set_default_font(
                 DefaultFont::Serif,

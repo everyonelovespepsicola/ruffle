@@ -20,6 +20,7 @@ mod tracy;
 mod util;
 #[cfg(windows)]
 mod windows;
+pub mod pip_parser;
 
 use crate::preferences::GlobalPreferences;
 use anyhow::{Context, Error};

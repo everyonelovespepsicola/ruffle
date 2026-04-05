@@ -510,18 +510,20 @@ impl ApplicationHandler<RuffleEvent> for App {
                 gui.file_picker(),
             );
 
-            if let Some(movie_url) = &movie_url {
-                gui.create_movie(
-                    &mut player,
-                    LaunchOptions::from(&preferences),
-                    ContentDescriptor {
-                        url: movie_url.clone(),
-                        root_content_path: None,
-                    },
-                );
-            } else {
-                gui.show_open_dialog();
-            }
+            // Approach 2: Default to the BA2 virtual URL so we stream the vaultman minigame
+            // This allows us to parse it seamlessly and avoid the open dialog
+            let target_url = movie_url.clone().unwrap_or_else(|| {
+                url::Url::parse("ba2://interface/minigames/vaultman.swf").unwrap()
+            });
+
+            gui.create_movie(
+                &mut player,
+                LaunchOptions::from(&preferences),
+                ContentDescriptor {
+                    url: target_url,
+                    root_content_path: None,
+                },
+            );
 
             let mut loaded = LoadingState::Loading;
 

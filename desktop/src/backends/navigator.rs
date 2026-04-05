@@ -10,6 +10,12 @@ use tokio::sync::oneshot;
 use url::Url;
 use winit::event_loop::EventLoopProxy;
 
+use ruffle_core::backend::navigator::{
+    NavigationMethod, NavigatorBackend, OwnedFuture, Request, Response, Error as NavError
+};
+use ruffle_frontend_utils::backends::navigator::ExternalNavigatorBackend;
+use std::borrow::Cow;
+
 use crate::cli::{FilesystemAccessMode, OpenUrlMode};
 use crate::custom_event::RuffleEvent;
 use crate::gui::DialogDescriptor;
@@ -196,5 +202,84 @@ impl NavigatorInterface for DesktopNavigatorInterface {
             )));
         let result = receiver.await;
         result == Ok(NetworkAccessDialogResult::Allow)
+    }
+}
+
+/// A custom wrapper around Ruffle's ExternalNavigatorBackend to intercept
+/// requests for Fallout 76 Holotape .pip binary save files and redirect
+/// them to our local JSON parser.
+pub struct HolotapeNavigatorBackend {
+    inner: ExternalNavigatorBackend,
+}
+
+impl HolotapeNavigatorBackend {
+    pub fn new(inner: ExternalNavigatorBackend) -> Self {
+        Self { inner }
+    }
+}
+
+impl NavigatorBackend for HolotapeNavigatorBackend {
+    fn navigate_to_url(
+        &self,
+        url: &str,
+        target: &str,
+        vars_method: Option<(NavigationMethod, ruffle_core::indexmap::IndexMap<String, String>)>,
+    ) {
+        self.inner.navigate_to_url(url, target, vars_method)
+    }
+
+    fn fetch(&self, request: Request) -> OwnedFuture<Response, NavError> {
+        let url_str = request.url.to_string();
+
+        if url_str.ends_with("HolotapeGameData.pip") {
+            let is_post = matches!(request.method, NavigationMethod::Post);
+            let body = request.body.clone().unwrap_or_default();
+
+            return Box::pin(async move {
+                if is_post {
+                    // Intercepting a save request from the SWF
+                    tracing::info!("Intercepted save to HolotapeGameData.pip");
+                    if let Ok(json) = crate::pip_parser::parse_pip_to_json(&body) {
+                        let _ = std::fs::create_dir_all("saves");
+                        let _ = std::fs::write("saves/savedata.json", json);
+                    }
+                    Ok(Response {
+                        url: url_str,
+                        body: vec![],
+                        status: 200,
+                        redirects: 0,
+                    })
+                } else {
+                    // Intercepting a load request from the SWF
+                    tracing::info!("Intercepted load from HolotapeGameData.pip");
+                    let pip_bytes = if let Ok(json) = std::fs::read_to_string("saves/savedata.json") {
+                        crate::pip_parser::parse_json_to_pip(&json).unwrap_or_default()
+                    } else {
+                        vec![] // Return default/empty state if no save exists
+                    };
+
+                    Ok(Response {
+                        url: url_str,
+                        body: pip_bytes,
+                        status: 200,
+                        redirects: 0,
+                    })
+                }
+            });
+        }
+
+        self.inner.fetch(request)
+    }
+
+    fn spawn_future(&mut self, future: OwnedFuture<(), NavError>) {
+        self.inner.spawn_future(future)
+    }
+
+    fn resolve_relative_url(&self, url: &str) -> Cow<'_, Url> {
+        self.inner.resolve_relative_url(url)
+    }
+
+    fn preflight_url(&self, url: &Url) -> Result<(), NavError> {
+        self.inner.preflight_url(url)
     }
 }

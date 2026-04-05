@@ -14,10 +14,7 @@ use std::time::Duration;
 use url::Url;
 
 fn get_default_save_directory() -> std::path::PathBuf {
-    dirs::data_local_dir()
-        .expect("Couldn't find a valid data_local dir")
-        .join("ruffle")
-        .join("SharedObjects")
+    std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")).join("saves")
 }
 
 fn get_default_config_directory() -> std::path::PathBuf {

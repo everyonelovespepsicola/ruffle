@@ -7,4 +7,5 @@ pub use external_interface::DesktopExternalInterfaceProvider;
 pub use fscommand::DesktopFSCommandProvider;
 pub use navigator::DesktopNavigatorInterface;
 pub use navigator::PathAllowList;
+pub use navigator::HolotapeNavigatorBackend;
 pub use ui::DesktopUiBackend;

@@ -1,0 +1,40 @@
+Project Manifest: Fallout Holotape Emulator (Native Rust)
+Goal: Create a standalone, high-performance emulator for Fallout 76 holotape minigames by integrating a .ba2 parser directly into the Ruffle (Rust) source code.
+
+1. Core Architecture
+Base Engine: Ruffle (Rust Source).
+
+Data Source: Stream assets directly from SeventySix - Interface.ba2.
+
+Licensing: MIT License (Priority: Zero-reciprocity, proprietary-friendly).
+
+2. Target Assets (From Game Manifest)
+Archive Path: ...\Fallout76\Data\SeventySix - Interface.ba2.
+
+Minigame SWFs: * interface/minigames/vaultman.swf (Red Menace)
+
+interface/minigames/missilecommand.swf (Atomic Command)
+
+interface/minigames/pittfall.swf (Pittfall)
+
+Binary Data: HolotapeGameData.pip (Found in interface archives).
+
+3. Functional Requirements
+Zero-Footprint Streaming: Do not extract files to disk. Use a Rust-based BA2 crate to stream .swf and .dds files directly into Ruffle’s memory buffer.
+
+Reprogrammed Controls: Implement native controller support using the gilrs crate. Map XInput/DirectInput to the specific ActionScript key events required by the holotape .swf files.
+
+Visual Cleanup: Hardcode the removal of engine-level stutters identified in game dumps:
+
+Disable Bloom (fBloomScale = 0.0).
+
+Force Instant Eye Adaptation (bAlwaysInstantEyeAdapt = 1).
+
+Ignore high-luminance flashes (fLuminanceHistogramIgnoredBrightsPercentile = 45.0).
+
+4. Implementation Logic for AI Assistant
+VFS (Virtual File System): "Please help me implement a wrapper for Ruffle’s FileProvider that redirects calls to a memory stream sourced from the BA2 archive."
+
+Input Hooking: "Help me modify Ruffle’s desktop frontend to intercept gamepad events and translate them into KeyCode presses for the Flash player."
+
+State Persistence: "Help me write a parser for the .pip binary format to load/save high scores locally in a savedata.json instead of syncing with Bethesda servers."
